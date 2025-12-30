@@ -1,0 +1,4 @@
+output/
+scan_report.log
+*.png
+*.html
