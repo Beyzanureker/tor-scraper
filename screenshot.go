@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -12,23 +12,20 @@ import (
 )
 
 func runScreenshots() {
-	fmt.Println("[SCREENSHOT] Screenshot task started")
+	log.Println("[SCREENSHOT] Ekran görüntüsü görevi başladı.")
 
-	_ = os.MkdirAll("output/screenshots", 0755)
-
-	file, err := os.Open("targets.yaml")
-	if err != nil {
-		fmt.Println("targets.yaml not found")
-		return
-	}
+	file, _ := os.Open("targets.yaml")
 	defer file.Close()
-
 	scanner := bufio.NewScanner(file)
 
-	opts := append(
-		chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
+	// Hocalarının kullandığı Docker uyumlu ve Bot engelleyici bayraklar [cite: 34, 37, 40, 42]
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true), // Docker için zorunlu [cite: 34, 40]
 		chromedp.Flag("proxy-server", "socks5://127.0.0.1:9150"),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"), // Bot koruması aşma
+		chromedp.Flag("no-sandbox", true),                               // Docker hata önleyici [cite: 42]
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-web-security", true),
 		chromedp.Flag("ignore-certificate-errors", true),
 	)
 
@@ -38,35 +35,31 @@ func runScreenshots() {
 	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
-	ctx, cancel = context.WithTimeout(ctx, 120*time.Second)
-	defer cancel()
-
 	for scanner.Scan() {
 		url := strings.TrimSpace(scanner.Text())
 		if url == "" {
 			continue
 		}
 
-		fmt.Println("[SCREENSHOT] Capturing:", url)
+		log.Printf("[SCREENSHOT] Çekiliyor: %s\n", url)
 
 		var buf []byte
-		err := chromedp.Run(ctx,
+		// Her bir site için 90 saniyelik limit
+		taskCtx, taskCancel := context.WithTimeout(ctx, 90*time.Second)
+
+		err := chromedp.Run(taskCtx,
 			chromedp.Navigate(url),
-			chromedp.Sleep(5*time.Second),
+			chromedp.Sleep(5*time.Second), // Sayfanın tam render edilmesi için
 			chromedp.FullScreenshot(&buf, 90),
 		)
+		taskCancel()
 
 		if err != nil {
-			fmt.Println("[SCREENSHOT] FAILED:", url)
+			log.Printf("[HATA] %s çekilemedi: %v\n", url, err)
 			continue
 		}
 
-		name := strings.ReplaceAll(url, "http://", "")
-		name = strings.ReplaceAll(name, "/", "_")
-
-		_ = os.WriteFile("output/screenshots/"+name+".png", buf, 0644)
-		fmt.Println("[SCREENSHOT] Saved:", name)
+		filename := strings.ReplaceAll(strings.TrimPrefix(url, "http://"), "/", "_") + ".png"
+		os.WriteFile("output/screenshots/"+filename, buf, 0644)
 	}
-
-	fmt.Println("[SCREENSHOT] Screenshot task finished")
 }

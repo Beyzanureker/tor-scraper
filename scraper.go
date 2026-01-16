@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -13,34 +13,22 @@ import (
 )
 
 func runScraper() {
-	fmt.Println("[SCRAPER] HTML scraping started")
+	log.Println("[SCRAPER] HTML kazıma işlemi başladı.")
 
-	_ = os.MkdirAll("output/html", 0755)
-
-	report, _ := os.Create("scan_report.log")
-	defer report.Close()
-
-	// Tor proxy
+	// Tor Proxy Bağlantısı (Port: 9150)
 	dialer, err := proxy.SOCKS5("tcp", "127.0.0.1:9150", nil, proxy.Direct)
 	if err != nil {
-		fmt.Println("Tor proxy error:", err)
+		log.Printf("[HATA] Tor Proxy hatası: %v\n", err)
 		return
 	}
 
 	client := &http.Client{
-		Transport: &http.Transport{
-			Dial: dialer.Dial,
-		},
-		Timeout: 30 * time.Second,
+		Transport: &http.Transport{Dial: dialer.Dial},
+		Timeout:   90 * time.Second, // Tor yavaşlığı için hocalarının kullandığı süre
 	}
 
-	file, err := os.Open("targets.yaml")
-	if err != nil {
-		fmt.Println("targets.yaml not found")
-		return
-	}
+	file, _ := os.Open("targets.yaml")
 	defer file.Close()
-
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
@@ -49,23 +37,17 @@ func runScraper() {
 			continue
 		}
 
-		fmt.Println("[SCRAPER] Scanning:", url)
-
+		log.Printf("[SCRAPER] taranıyor: %s\n", url)
 		resp, err := client.Get(url)
 		if err != nil {
-			report.WriteString(url + " -> DEAD\n")
+			log.Printf("[HATA] %s ulaşılamadı: %v\n", url, err)
 			continue
 		}
 
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		name := strings.ReplaceAll(url, "http://", "")
-		name = strings.ReplaceAll(name, "/", "_")
-
-		_ = os.WriteFile("output/html/"+name+".html", body, 0644)
-		report.WriteString(url + " -> ACTIVE\n")
+		filename := strings.ReplaceAll(strings.TrimPrefix(url, "http://"), "/", "_") + ".html"
+		os.WriteFile("output/html/"+filename, body, 0644)
 	}
-
-	fmt.Println("[SCRAPER] HTML scraping finished")
 }
