@@ -18,12 +18,11 @@ func runScreenshots() {
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
-	// Hocalarının kullandığı Docker uyumlu ve Bot engelleyici bayraklar [cite: 34, 37, 40, 42]
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true), // Docker için zorunlu [cite: 34, 40]
+		chromedp.Flag("headless", true),
 		chromedp.Flag("proxy-server", "socks5://127.0.0.1:9150"),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"), // Bot koruması aşma
-		chromedp.Flag("no-sandbox", true),                               // Docker hata önleyici [cite: 42]
+		chromedp.Flag("disable-blink-features", "AutomationControlled"),
+		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("disable-web-security", true),
 		chromedp.Flag("ignore-certificate-errors", true),
@@ -44,12 +43,12 @@ func runScreenshots() {
 		log.Printf("[SCREENSHOT] Çekiliyor: %s\n", url)
 
 		var buf []byte
-		// Her bir site için 90 saniyelik limit
+
 		taskCtx, taskCancel := context.WithTimeout(ctx, 90*time.Second)
 
 		err := chromedp.Run(taskCtx,
 			chromedp.Navigate(url),
-			chromedp.Sleep(5*time.Second), // Sayfanın tam render edilmesi için
+			chromedp.Sleep(5*time.Second),
 			chromedp.FullScreenshot(&buf, 90),
 		)
 		taskCancel()
